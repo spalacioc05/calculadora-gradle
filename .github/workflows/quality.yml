@@ -44,6 +44,13 @@ jobs:
       - name: Compilar y ejecutar pruebas (JUnit 5 + Karate) con cobertura JaCoCo
         run: ./gradlew build jacocoTestReport --no-daemon
 
+      - name: Configurar JDK 21 para SonarCloud
+        if: env.SONAR_TOKEN != ''
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Analizar con SonarCloud
         if: env.SONAR_TOKEN != ''
         env:
