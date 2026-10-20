@@ -97,6 +97,7 @@ Tampoco agregamos validación para casos que no pueden pasar en la práctica (po
 | Bugs conocidos | 1 (NaN no validado) | 0 conocidos |
 | Métodos en `ProcesadorNotas` | 1 | 5 (1 público + 4 privados de validación) |
 | Quality Gate de SonarCloud | No evaluado | No evaluado todavía (ver sección 7) |
+| GitHub Actions | No existía | ✓ verde (ver sección 6) |
 
 Todos estos números salen de correr `./gradlew clean test jacocoTestReport` localmente y leer el XML/HTML que genera JaCoCo, no son estimaciones.
 
@@ -114,7 +115,13 @@ Corren junto con las pruebas de JUnit al ejecutar `.\gradlew.bat clean test` (Ka
 
 ## 6. Integración continua
 
-El workflow de GitHub Actions (`.github/workflows/quality.yml`) quedó configurado para correr en cada push/PR a `main`. Localmente simulamos exactamente los mismos comandos que corre el workflow (`./gradlew build jacocoTestReport`) y funcionaron sin errores. La verificación real de que el workflow corre en GitHub (con el check verde) se hace después de publicar la rama — ver la sección de evidencias en el README principal del repo o el PR correspondiente.
+El workflow de GitHub Actions (`.github/workflows/quality.yml`) corre en cada push/PR a `main`. La primera versión que subimos en realidad no registraba ningún job (GitHub la mostraba usando el nombre del archivo en vez del `name:` del workflow, que es la señal de que no pudo interpretarlo), así que tuvo que corregirse — el problema era usar `secrets.SONAR_TOKEN` directamente dentro de un `if:`, que no es un patrón seguro; se cambió por una variable de entorno a nivel de job que sí se puede leer en el `if`.
+
+Después de esa corrección, la ejecución quedó verde de verdad:
+
+- Run: https://github.com/spalacioc05/calculadora-gradle/actions/runs/39346477989 (✓ success, 25s)
+- Compila, corre las 20 pruebas JUnit + 5 de Karate, genera el reporte de JaCoCo y publica tres artefactos: el reporte de pruebas, el reporte de cobertura y el `.jar`.
+- El paso de SonarCloud se omite con el aviso `No se encontro el secreto SONAR_TOKEN...` tal como estaba pensado, porque ese secreto todavía no existe (ver sección 7).
 
 ## 7. Qué quedó pendiente (acción manual)
 
