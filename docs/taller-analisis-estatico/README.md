@@ -96,8 +96,8 @@ Tampoco agregamos validación para casos que no pueden pasar en la práctica (po
 | Cobertura de ramas (JaCoCo) | 82.1% (23/28) | 100% (32/32) |
 | Bugs conocidos | 1 (NaN no validado) | 0 conocidos |
 | Métodos en `ProcesadorNotas` | 1 | 5 (1 público + 4 privados de validación) |
-| Quality Gate de SonarCloud | No evaluado | No evaluado todavía (ver sección 7) |
-| GitHub Actions | No existía | ✓ verde (ver sección 6) |
+| Quality Gate de SonarCloud (análisis CI) | No evaluado | No evaluado todavía — falta apagar "Automatic Analysis" (ver sección 6) |
+| GitHub Actions (build + pruebas + cobertura) | No existía | ✓ verde |
 
 Todos estos números salen de correr `./gradlew clean test jacocoTestReport` localmente y leer el XML/HTML que genera JaCoCo, no son estimaciones.
 
@@ -115,29 +115,63 @@ Corren junto con las pruebas de JUnit al ejecutar `.\gradlew.bat clean test` (Ka
 
 ## 6. Integración continua
 
-El workflow de GitHub Actions (`.github/workflows/quality.yml`) corre en cada push/PR a `main`. La primera versión que subimos en realidad no registraba ningún job (GitHub la mostraba usando el nombre del archivo en vez del `name:` del workflow, que es la señal de que no pudo interpretarlo), así que tuvo que corregirse — el problema era usar `secrets.SONAR_TOKEN` directamente dentro de un `if:`, que no es un patrón seguro; se cambió por una variable de entorno a nivel de job que sí se puede leer en el `if`.
+El workflow de GitHub Actions (`.github/workflows/quality.yml`) corre en cada push/PR a `main`. No quedó bien a la primera — tuvo tres intentos, y vale la pena dejar los tres por escrito en vez de solo mostrar el que sí funcionó, porque cada uno fue un problema real y distinto:
 
-Después de esa corrección, la ejecución quedó verde de verdad:
+**Intento 1 — el workflow no registraba ningún job.**
+La primera versión usaba `secrets.SONAR_TOKEN` directamente dentro de un `if:`, y GitHub ni siquiera lograba interpretar el archivo (se notaba porque mostraba el nombre del archivo en vez del `name:` que le habíamos puesto). Se corrigió cambiándolo por una variable de entorno a nivel de job.
 
-- Run: https://github.com/spalacioc05/calculadora-gradle/actions/runs/39346477989 (✓ success, 25s)
-- Compila, corre las 20 pruebas JUnit + 5 de Karate, genera el reporte de JaCoCo y publica tres artefactos: el reporte de pruebas, el reporte de cobertura y el `.jar`.
-- El paso de SonarCloud se omite con el aviso `No se encontro el secreto SONAR_TOKEN...` tal como estaba pensado, porque ese secreto todavía no existe (ver sección 7).
+- Run: https://github.com/spalacioc05/calculadora-gradle/actions/runs/39346477989 — ✓ success, 25s. Compila, corre las 20 pruebas JUnit + 5 de Karate, genera JaCoCo y publica los artefactos. El paso de SonarCloud se omite con el aviso `No se encontro el secreto SONAR_TOKEN...`, porque en ese momento el secreto todavía no existía.
+
+**Intento 2 — SonarCloud exige Java 21.**
+Después se agregó el secreto `SONAR_TOKEN` en GitHub (eso sí fue manual, lo hizo quien tiene la cuenta). Con el secreto puesto, el paso de SonarCloud dejó de omitirse, pero falló:
+
+- Run: https://github.com/spalacioc05/calculadora-gradle/actions/runs/39346617634 — build, JUnit, Karate y JaCoCo corrieron bien, pero `:sonar` falló con `Java 17 is not supported. Please upgrade to Java 21 or newer`. El escáner de SonarCloud ahora exige JDK 21 o superior, aparte de en qué Java compile el proyecto. **Esta ejecución no cuenta como análisis exitoso.**
+
+Se agregó un paso `Configurar JDK 21 para SonarCloud` justo antes de `./gradlew sonar`, que solo cambia el JDK para ese paso (compilación, JUnit, Karate y JaCoCo siguen en Java 17, como se pidió).
+
+**Intento 3 — SonarCloud con "Automatic Analysis" activado.**
+Con JDK 21 puesto, `:sonar` avanzó más pero volvió a fallar, ahora con un mensaje distinto:
+
+- Run: https://github.com/spalacioc05/calculadora-gradle/actions/runs/39348495892 — el paso `Configurar JDK 21 para SonarCloud` corrió bien, pero `:sonar` falló con: `You are running CI analysis while Automatic Analysis is enabled. Please consider disabling one or the other.` **Tampoco cuenta como análisis exitoso.**
+
+Esto confirma algo que vimos por la API pública de SonarCloud: el proyecto `spalacioc05_calculadora-gradle` ya tenía un análisis **automático** registrado (el GitHub App de SonarCloud lo generó solo, sobre el commit inicial `ade29c0`, antes de que empezáramos a tocar nada). SonarCloud no deja correr los dos modos de análisis (automático y por CI) al mismo tiempo sobre el mismo proyecto, y hay que elegir uno. Como lo que pide el taller es análisis por CI con la cobertura de JaCoCo, el que hay que apagar es el automático.
+
+**Esto no se corrige desde el repositorio ni desde GitHub Actions — es una opción del proyecto en sonarcloud.io.** El paso exacto que falta (manual, requiere la cuenta de SonarCloud):
+
+1. Entrar a https://sonarcloud.io y abrir el proyecto `calculadora-gradle`.
+2. Ir a **Administration → Analysis Method**.
+3. Apagar **"Automatic Analysis"** (dejarlo solo en análisis por CI / GitHub Actions).
+4. Guardar, y volver a ejecutar el workflow (un push nuevo, o "Re-run jobs" en Actions).
+
+Mientras esa opción no se apague en sonarcloud.io, `:sonar` seguirá fallando con el mismo mensaje sin importar qué se cambie en el workflow.
+
+### Lo que sí se pudo ver de SonarCloud, aunque sea del análisis automático viejo
+
+Como el proyecto en SonarCloud es público, se pudo consultar su API sin necesitar el token (`sonarcloud.io/api/measures/component` y `.../issues/search`). Esto corresponde al análisis automático del commit inicial `ade29c0` — **antes** de cualquiera de nuestras correcciones, y sin la cobertura de JaCoCo (el análisis automático no la conoce):
+
+| Métrica | Valor (commit inicial, análisis automático) |
+|---|---|
+| Bugs | 0 |
+| Vulnerabilidades | 0 |
+| Code smells | 2 |
+| Líneas duplicadas | 0.0% |
+| Complejidad ciclomática | 15 |
+| Complejidad cognitiva | 14 |
+| Deuda técnica estimada | 20 minutos |
+
+Los 2 code smells son la misma regla en los dos archivos: `java:S1220 — Move this file to a named package`, tanto en `ProcesadorNotas.java` como en `ProcesadorNotasTest.java`. Es un hallazgo real y menor (el proyecto no usa paquetes Java, todo queda en el paquete por defecto) que no estaba en nuestra lista de la sección 3 porque lo encontramos vía la API pública, no leyendo el código a mano. No lo corregimos en esta entrega porque el pedido puntual era arreglar el workflow, no reestructurar paquetes — queda anotado como trabajo pendiente de baja prioridad.
+
+Esta tabla **no** es el análisis de CI con el código final ni con la cobertura de JaCoCo — es solo lo único de SonarCloud que pudimos confirmar de verdad hasta ahora. El análisis que sí integra nuestra cobertura y nuestro código final sigue pendiente de que se apague "Automatic Analysis".
 
 ## 7. Qué quedó pendiente (acción manual)
 
-Esto es lo único que no pudimos terminar nosotros directamente, porque requiere una cuenta y credenciales que no están disponibles en este entorno:
+Dos cosas, ambas fuera del repositorio:
 
-1. Crear una cuenta en [SonarCloud](https://sonarcloud.io) (se puede hacer con el login de GitHub).
-2. Importar el repositorio `spalacioc05/calculadora-gradle` como un proyecto nuevo.
-3. SonarCloud va a asignar una organización y una clave de proyecto. Si no coinciden exactamente con `spalacioc05` y `spalacioc05_calculadora-gradle` (que dejamos como valores por convención en `build.gradle`), hay que ajustar esas dos propiedades en el bloque `sonar { properties { ... } }`.
-4. Generar un token de SonarCloud (Account → Security → Generate Token).
-5. En GitHub: Settings → Secrets and variables → Actions → New repository secret, con nombre `SONAR_TOKEN` y el valor del token.
-6. Volver a correr el workflow (o hacer un push nuevo) para que el paso de SonarCloud deje de omitirse y se ejecute el análisis real.
+1. **Apagar "Automatic Analysis" en sonarcloud.io** (ver sección 6) — es lo único que bloquea que `:sonar` termine bien ahora que el secreto y el JDK 21 ya están resueltos.
+2. Después de apagarlo, volver a correr el workflow y confirmar que el job termine en verde con el paso de SonarCloud incluido — eso todavía no ha pasado y por eso esta entrega no lo presenta como terminado.
 
-Mientras ese secreto no exista, el workflow sigue funcionando (compila, prueba, genera cobertura), pero el paso de SonarCloud se salta con un aviso explícito en los logs — no se inventa un resultado falso.
-
-Una vez se agregue el token, en el dashboard de SonarCloud se podrá ver el Quality Gate, los code smells reales (si aparece alguno más allá de los que ya corregimos a mano) y la deuda técnica estimada. Ese reporte no está incluido en esta entrega porque, siendo honestos, no se ha podido generar todavía.
+Si al revisar el proyecto en SonarCloud la organización o la clave no coinciden con `spalacioc05` / `spalacioc05_calculadora-gradle` (los valores que dejamos por convención en `build.gradle`), también habría que ajustar esas dos propiedades — pero según la API pública, los nombres sí coinciden, así que no debería hacer falta.
 
 ## 8. Resumen para la sustentación
 
-En una frase: el procesador de notas ya tenía pruebas unitarias, nosotros le agregamos medición de cobertura real con JaCoCo, encontramos y corregimos un bug genuino (`NaN`) y varios huecos de prueba usando el propio reporte de cobertura como guía, bajamos la complejidad del método principal separándolo en validaciones más pequeñas, le sumamos pruebas de aceptación con Karate sobre las reglas de negocio, y automatizamos todo con GitHub Actions. Lo único que falta para que SonarCloud muestre su dashboard real es un token que hay que generar manualmente.
+El procesador de notas ya tenía pruebas unitarias; nosotros le agregamos medición de cobertura real con JaCoCo, encontramos y corregimos un bug genuino (`NaN`) y varios huecos de prueba usando el propio reporte de cobertura como guía, bajamos la complejidad del método principal separándolo en validaciones más pequeñas, le sumamos pruebas de aceptación con Karate, y automatizamos todo con GitHub Actions — que terminó verde después de tres intentos reales (sintaxis del workflow, versión de Java del escáner, y un paso de configuración en sonarcloud.io). El análisis de SonarCloud por CI, con la cobertura de JaCoCo integrada, todavía no se ha completado: lo único verificado de SonarCloud es un análisis automático viejo, de antes de nuestros cambios, que ya muestra 2 code smells menores y cero bugs. Falta un último clic en sonarcloud.io (apagar Automatic Analysis) para que el análisis real corra y se pueda mostrar completo.
