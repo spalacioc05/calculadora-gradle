@@ -1,17 +1,27 @@
 plugins {
     id 'java'
+    id 'jacoco'
+    id 'org.sonarqube' version '5.1.0.4882'
 }
 
 repositories {
     mavenCentral()
 }
 
+compileJava.options.encoding = 'UTF-8'
+compileTestJava.options.encoding = 'UTF-8'
+
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'com.intuit.karate:karate-junit5:1.4.1'
 }
 
 test {
     useJUnitPlatform()
+
+    // Las features de Karate y los @DisplayName de JUnit usan tildes;
+    // sin esto la consola de Windows las muestra mal (no afecta el resultado).
+    systemProperty 'file.encoding', 'UTF-8'
 
     reports {
         html.required = true
@@ -19,5 +29,29 @@ test {
 
     testLogging {
         events 'passed', 'skipped', 'failed'
+    }
+
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+jacocoTestReport {
+    dependsOn test
+
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+sonar {
+    properties {
+        property 'sonar.projectKey', 'spalacioc05_calculadora-gradle'
+        property 'sonar.organization', 'spalacioc05'
+        property 'sonar.host.url', 'https://sonarcloud.io'
+        property 'sonar.coverage.jacoco.xmlReportPaths', "${buildDir}/reports/jacoco/test/jacocoTestReport.xml"
     }
 }

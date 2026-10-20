@@ -170,6 +170,19 @@ class ProcesadorNotasTest {
     }
 
     @Test
+    @DisplayName("Rechaza cuando solo una de las listas está vacía")
+    void rechazaCuandoSoloUnaListaEstaVacia() {
+        // ARRANGE
+        notas.add(4.0);
+        // porcentajes se queda vacía a propósito.
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, porcentajes));
+    }
+
+    @Test
     @DisplayName("Rechaza una lista null")
     void rechazaListaNull() {
         // ARRANGE
@@ -187,6 +200,95 @@ class ProcesadorNotasTest {
         // ARRANGE
         notas.add(4.0);
         porcentajes.add(120.0);
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, porcentajes));
+    }
+
+    @Test
+    @DisplayName("Rechaza un porcentaje negativo")
+    void rechazaPorcentajeNegativo() {
+        // ARRANGE
+        notas.add(4.0);
+        notas.add(3.0);
+        porcentajes.add(-10.0);
+        porcentajes.add(110.0);
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, porcentajes));
+    }
+
+    @Test
+    @DisplayName("Rechaza una lista de porcentajes null")
+    void rechazaListaDePorcentajesNull() {
+        // ARRANGE
+        notas.add(4.0);
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, null));
+    }
+
+    @Test
+    @DisplayName("Rechaza una nota null dentro de la lista")
+    void rechazaNotaNullDentroDeLaLista() {
+        // ARRANGE
+        notas.add(4.0);
+        notas.add(null);
+        porcentajes.add(50.0);
+        porcentajes.add(50.0);
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, porcentajes));
+    }
+
+    @Test
+    @DisplayName("Rechaza un porcentaje null dentro de la lista")
+    void rechazaPorcentajeNullDentroDeLaLista() {
+        // ARRANGE
+        notas.add(4.0);
+        notas.add(3.0);
+        porcentajes.add(50.0);
+        porcentajes.add(null);
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, porcentajes));
+    }
+
+    @Test
+    @DisplayName("Rechaza una nota NaN")
+    void rechazaNotaNaN() {
+        // ARRANGE
+        // NaN ("Not a Number") no es menor, mayor ni igual a ningún double,
+        // por eso antes de la corrección se saltaba la validación de rango.
+        notas.add(Double.NaN);
+        notas.add(3.0);
+        porcentajes.add(50.0);
+        porcentajes.add(50.0);
+
+        // ACT + ASSERT
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> procesador.calcularNotaFinal(notas, porcentajes));
+    }
+
+    @Test
+    @DisplayName("Rechaza un porcentaje NaN")
+    void rechazaPorcentajeNaN() {
+        // ARRANGE
+        notas.add(4.0);
+        notas.add(3.0);
+        porcentajes.add(Double.NaN);
+        porcentajes.add(50.0);
 
         // ACT + ASSERT
         assertThrows(
