@@ -2,9 +2,9 @@ name: Calidad de software
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,20 +13,20 @@ jobs:
   build-and-analyze:
     name: Build, pruebas, cobertura y SonarCloud
     runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
         with:
-          # SonarCloud necesita el historial completo para calcular
-          # métricas como deuda técnica sobre código nuevo.
           fetch-depth: 0
 
       - name: Configurar JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Cachear dependencias de Gradle y SonarCloud
         uses: actions/cache@v4
@@ -36,30 +36,25 @@ jobs:
             ~/.gradle/wrapper
             ~/.sonar/cache
           key: ${{ runner.os }}-gradle-sonar-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-sonar-
+          restore-keys: ${{ runner.os }}-gradle-sonar-
 
-      - name: Dar permisos de ejecución a gradlew
+      - name: Dar permisos de ejecucion a gradlew
         run: chmod +x ./gradlew
 
       - name: Compilar y ejecutar pruebas (JUnit 5 + Karate) con cobertura JaCoCo
         run: ./gradlew build jacocoTestReport --no-daemon
 
       - name: Analizar con SonarCloud
-        # El job completo no depende de este paso: si todavía no se ha creado
-        # el secreto SONAR_TOKEN en el repositorio, este paso simplemente se
-        # omite y el resto del workflow sigue funcionando.
-        if: ${{ secrets.SONAR_TOKEN != '' }}
+        if: env.SONAR_TOKEN != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: ./gradlew sonar --no-daemon
 
-      - name: Aviso cuando SonarCloud no está configurado
-        if: ${{ secrets.SONAR_TOKEN == '' }}
+      - name: Aviso cuando SonarCloud no esta configurado
+        if: env.SONAR_TOKEN == ''
         run: echo "::warning::No se encontro el secreto SONAR_TOKEN, se omitio el analisis de SonarCloud. Ver docs/taller-analisis-estatico para configurarlo."
 
-      - name: Publicar reporte de pruebas JUnit/Karate
+      - name: Publicar reporte de pruebas JUnit y Karate
         if: always()
         uses: actions/upload-artifact@v4
         with:
